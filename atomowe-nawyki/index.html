@@ -415,23 +415,29 @@ $('#start-title').innerHTML = esc(QUIZ.title).replace(esc(QUIZ.titleHi || ''), '
 $('#rule-time').textContent = T + ' s';
 const nickIn = $('#nick'); nickIn.value = store.get('nick', '');
 const rounds = QUIZ.rounds;
-// „Cały quiz” na całą szerokość, części w jednym rzędzie małych kafelków
-const choices = rounds.map(r => ({ id: r.id, lab: r.label.replace(/ z \d+$/, ''), tt: r.title, n: r.questions.length, rounds: [r] }));
-if(rounds.length > 1) choices.unshift({ id: 'all', lab: 'Cały quiz', tt: 'Wszystkie części', n: rounds.reduce((s, r) => s + r.questions.length, 0), rounds: rounds });
-let sel = store.get('sel', choices[0].id);
+// Link do jednej części (QR na slajdzie kończącym część): ?czesc=1 otwiera od razu tę część, bez wyboru
+const only = (() => { try { const n = new URLSearchParams(location.search).get('czesc'); return rounds.find(r => r.id === 'c' + n) || null; } catch(e){ return null; } })();
+// Bez parametru: „Cały quiz” na całą szerokość, części w jednym rzędzie małych kafelków
+const choices = only
+  ? [{ id: only.id, lab: only.label, tt: only.title, n: only.questions.length, rounds: [only] }]
+  : rounds.map(r => ({ id: r.id, lab: r.label.replace(/ z \d+$/, ''), tt: r.title, n: r.questions.length, rounds: [r] }));
+if(!only && rounds.length > 1) choices.unshift({ id: 'all', lab: 'Cały quiz', tt: 'Wszystkie części', n: rounds.reduce((s, r) => s + r.questions.length, 0), rounds: rounds });
+let sel = only ? only.id : store.get('sel', choices[0].id);
 if(!choices.some(c => c.id === sel)) sel = choices[0].id;
+const startImg = only ? only.img : QUIZ.imgStart;
+if(only) document.title = QUIZ.title + ' · ' + only.label + ' · Quiz';
 function paintChoices(){
   const chip = c => '<button class="chip" role="radio" aria-checked="' + (c.id === sel) + '" data-id="' + c.id + '">'
     + '<span class="lab">' + esc(c.lab) + '</span><span class="tt">' + esc(c.tt) + '</span><span class="meta">' + c.n + ' pyt.</span></button>';
-  $('#rounds').innerHTML = rounds.length > 1
+  $('#rounds').innerHTML = choices.length > 1
     ? chip(choices[0]) + '<div class="parts">' + choices.slice(1).map(chip).join('') + '</div>'
     : chip(choices[0]);
   const best = store.get('best:' + sel, 0);
   $('#start-record').innerHTML = best ? 'Twój rekord: <b>' + fmt(best) + '</b> pkt' : '';
 }
-$('#rounds').addEventListener('click', e => { const b = e.target.closest('.chip'); if(!b) return; sel = b.dataset.id; store.set('sel', sel); paintChoices(); });
+$('#rounds').addEventListener('click', e => { const b = e.target.closest('.chip'); if(!b || only) return; sel = b.dataset.id; store.set('sel', sel); paintChoices(); });
 paintChoices();
-hero($('#hero-start'), QUIZ.imgStart);
+hero($('#hero-start'), startImg);
 
 /* ---- gra ---- */
 let S = null, raf = 0, readTimer = 0, lastTick = 0;
@@ -582,7 +588,7 @@ function finish(){
   setTimeout(() => confetti(pct >= .6 ? 220 : 110), 300);
 }
 $('#btn-again').addEventListener('click', start);
-$('#btn-home').addEventListener('click', () => { paintChoices(); hero($('#hero-start'), QUIZ.imgStart); show('s-start'); });
+$('#btn-home').addEventListener('click', () => { paintChoices(); hero($('#hero-start'), startImg); show('s-start'); });
 $('#btn-start').addEventListener('click', start);
 nickIn.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); start(); } });
 document.addEventListener('keydown', e => {
